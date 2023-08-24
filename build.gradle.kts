@@ -22,8 +22,8 @@ group = "tools.redstone"
 version = "1.0"
 
 java {
-    sourceCompatibility = JavaVersion.VERSION_17 // java 17
-    targetCompatibility = JavaVersion.VERSION_11 // java 11
+    sourceCompatibility = JavaVersion.VERSION_16
+    targetCompatibility = JavaVersion.VERSION_16
 
     withSourcesJar()
     withJavadocJar()
