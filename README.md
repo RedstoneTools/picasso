@@ -1,5 +1,5 @@
 <div style="display: grid; align-items: center;  grid-template-columns: 1fr 1fr 1fr; column-gap: 5px;">
-<img align="left" src="project/logo650x650.png" width="150" height="150">
+<img align="left" src="project/logo650x650.png" width="155" height="155">
 <div align="left">
     <h2>picasso 🥶</h2>
     <p style="padding-right: 300px">
