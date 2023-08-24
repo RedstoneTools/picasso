@@ -28,14 +28,14 @@ public class ClassDependencyAnalyzer {
     static final Set<String> specialMethods = Set.of("unimplemented", "isImplemented", "<init>");     // Special methods on abstractions
 
     // The result of the dependency analysis on a class
-    public static class ClassAnalysis {
+    public class ClassAnalysis {
         public boolean completed = false;                                                     // Whether this analysis is complete
         public boolean running = false;
         public final Map<ReferenceInfo, ReferenceAnalysis> analyzedMethods = new HashMap<>(); // All analysis objects for the methods in this class
         public List<Dependency> dependencies = new ArrayList<>();                             // All dependencies recorded in this class
 
         // Check whether all direct and switch dependencies are implemented
-        public boolean areAllImplemented(AbstractionProvider abstractionProvider) {
+        public boolean areAllImplemented() {
             for (Dependency dep : dependencies)
                 if (!dep.isImplemented(abstractionProvider))
                     return false;

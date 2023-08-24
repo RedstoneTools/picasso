@@ -2,7 +2,6 @@ package test.picasso;
 
 import org.junit.jupiter.api.function.Executable;
 import org.opentest4j.AssertionFailedError;
-import tools.redstone.picasso.Abstracraft;
 import tools.redstone.picasso.AbstractionManager;
 import tools.redstone.picasso.AbstractionProvider;
 import tools.redstone.picasso.adapter.AdapterAnalysisHook;
@@ -165,11 +164,11 @@ public class TestSystem {
 
                 // auto register impls
                 if (testAnnotation.autoRegisterImpls()) {
-                    abstractionProvider.registerImplsFromResources(
-                            new PackageWalker(klass, klass.getPackageName())
-                                .findResources()
-                                .filter(r -> r.name().startsWith(klass.getSimpleName() + "$"))
-                                .filter(r -> r.trimmedName().endsWith("Impl")));
+                    new PackageWalker(klass, klass.getPackageName())
+                            .findResources()
+                            .filter(r -> r.name().startsWith(klass.getSimpleName() + "$"))
+                            .filter(r -> r.trimmedName().endsWith("Impl"))
+                            .forEach(abstractionProvider::loadAndRegisterImpl);
                 }
 
                 long t2 = System.currentTimeMillis();

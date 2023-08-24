@@ -1,5 +1,7 @@
 package tools.redstone.picasso;
 
+import tools.redstone.picasso.adapter.AdapterAnalysisHook;
+import tools.redstone.picasso.adapter.AdapterRegistry;
 import tools.redstone.picasso.usage.Abstraction;
 
 import java.util.*;
@@ -97,6 +99,16 @@ public class AbstractionManager {
      */
     public AbstractionProvider createProvider() {
         return new AbstractionProvider(this);
+    }
+
+    public AbstractionProvider createDefaultProvider() {
+        return new AbstractionProvider(this)
+                .addAnalysisHook(AbstractionProvider.excludeCallsOnSelfAsDependencies())
+                .addAnalysisHook(AbstractionProvider.checkDependenciesForInterface(Abstraction.class, true))
+                .addAnalysisHook(AbstractionProvider.checkStaticFieldsNotNull())
+                .addAnalysisHook(AbstractionProvider.checkForExplicitImplementation(Abstraction.class))
+                .addAnalysisHook(AbstractionProvider.autoRegisterLoadedImplClasses())
+                .addAnalysisHook(new AdapterAnalysisHook(Abstraction.class, AdapterRegistry.getInstance()));
     }
 
 }

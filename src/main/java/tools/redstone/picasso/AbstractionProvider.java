@@ -110,6 +110,11 @@ public class AbstractionProvider {
         final Class<?> klass = findClass(implClassName);
         abstractionManager.registerImpl(klass);
     }
+
+    public void loadAndRegisterImpl(PackageWalker.Resource resource) {
+        final Class<?> klass = findClass(resource.publicPath());
+        abstractionManager.registerImpl(klass);
+    }
     
     // Check whether the given ref is implemented
     // without referencing the cache
@@ -324,7 +329,7 @@ public class AbstractionProvider {
         var analyzer = analyzer(klass);
         if (analyzer == null || !analyzer.getClassAnalysis().completed)
             return false;
-        return analyzer.getClassAnalysis().areAllImplemented(this);
+        return analyzer.getClassAnalysis().areAllImplemented();
     }
 
     /**
@@ -353,16 +358,6 @@ public class AbstractionProvider {
         this.partialAnalyzer.addHook(hook);
         hook.onRegister(this);
         return this;
-    }
-
-    /**
-     * Iterate over all given resources and try to load
-     * and register them as impl classes.
-     *
-     * @param stream The resources.
-     */
-    public void registerImplsFromResources(Stream<PackageWalker.Resource> stream) {
-        stream.forEach(resource -> loadAndRegisterImpl(resource.publicPath()));
     }
 
     /**

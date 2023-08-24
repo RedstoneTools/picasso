@@ -23,11 +23,10 @@ public class FindImplTest {
         ReflectUtil.ensureLoaded(A.class);
         ReflectUtil.ensureLoaded(B.class);
         final AbstractionProvider abstractionProvider = new AbstractionProvider(AbstractionManager.getInstance());
-        abstractionProvider.registerImplsFromResources(
-                new PackageWalker(this.getClass(), "test.abstracraft.core")
+        new PackageWalker(this.getClass(), "test.abstracraft.core")
                 .findResources()
                 .filter(r -> r.trimmedName().endsWith("Impl"))
-        );
+                .forEach(abstractionProvider::loadAndRegisterImpl);
 
         // check impls registered
         Assertions.assertEquals(AImpl.class.getName(), abstractionProvider.getImplByClass(A.class).getName());
