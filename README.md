@@ -1,12 +1,19 @@
-<div float="left">
-<img src="project/logo650x650.png" width="200" height="200">
-<h2>picasso</h2>
-Picasso is a library made to streamline development of advanced,
-multi-version APIs and abstractions and greatly reduce the boilerplate in using those.
+<div style="display: grid; align-items: center;  grid-template-columns: 1fr 1fr 1fr; column-gap: 5px;">
+<img align="left" src="project/logo650x650.png" width="150" height="150">
+<div align="left">
+    <h2>picasso 🥶</h2>
+    <p style="padding-right: 300px">
+        Picasso is a library made to streamline development of advanced,
+        multi-version APIs and abstractions and greatly reduce the boilerplate in using those. It provides a set
+        of advanced and flexible systems such as bytecode dependency analysis, automated optimized value adapters and a hook system which allows you
+        to write your own systems on top picasso's bytecode analysis/transformer foundation, to name a few.
+    </p>
+</div>
 </div>
 
-### An example
-[ ] TODO: write docs
+<br>    
+
+### An example 
 ```java
 /* An example of picasso's most fundamental
  * application, dependency analysis */
