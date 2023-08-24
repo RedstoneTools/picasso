@@ -1,7 +1,9 @@
-<img src="project/logo650x650.png" width="200" height="200" float="left">
+<div float="left">
+<img src="project/logo650x650.png" width="200" height="200">
 <h2>picasso</h2>
 Picasso is a library made to streamline development of advanced,
 multi-version APIs and abstractions and greatly reduce the boilerplate in using those.
+</div>
 
 ### An example
 [ ] TODO: write docs
