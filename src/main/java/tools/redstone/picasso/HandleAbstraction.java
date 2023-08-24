@@ -29,7 +29,7 @@ public abstract class HandleAbstraction<H> implements Abstraction {
      * @return The handle as the given type.
      */
     @SuppressWarnings("unchecked")
-    protected final <T extends H> T handle() {
+    public final <T extends H> T handle() {
         return (T) handle;
     }
 

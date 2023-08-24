@@ -16,43 +16,25 @@ import java.util.function.Function;
  * @param <B> Second type.
  */
 public interface Adapter<A, B> {
-    MethodHandle MH_HandleAbstraction_handle =
-            ThrowingSupplier.safe(() -> ReflectUtil.getInternalLookup()
-            .findVirtual(HandleAbstraction.class, "handle", MethodType.methodType(Object.class)));
 
-    static <A, B> Adapter<A, B> of(Class<? extends A> aClass,
-                                   Class<? extends B> bClass,
-                                   Function<B, A> toA,
-                                   Function<A, B> toB) {
-        return new Adapter<A, B>() {
-            @Override
-            public Class<? extends A> aClass() {
-                return aClass;
-            }
-
-            @Override
-            public Class<? extends B> bClass() {
-                return bClass;
-            }
-
-            @Override
-            public A toA(B val) {
-                return toA.apply(val);
-            }
-
-            @Override
-            public B toB(A val) {
-                return toB.apply(val);
-            }
-        };
-    }
-
+    /**
+     * Creates an adapter for the given handle and abstraction classes.
+     *
+     * This assumes that the abstraction class is implemented by a
+     * {@link HandleAbstraction}-based implementation with a constructor
+     * which takes as it's only argument the handle at first use.
+     *
+     * @param handleClass The handle class.
+     * @param abstractionClass The abstraction class.
+     * @param <A> The abstraction type.
+     * @param <H> The handle type.
+     * @return The adapter for A -> H.
+     */
     @SuppressWarnings("unchecked")
     static <A, H> Adapter<H, A> handle(Class<H> handleClass, Class<A> abstractionClass) {
         try {
             return new Adapter<>() {
                 Class<?> implClass;
-                MethodHandle methodGetHandle;
                 MethodHandle constructImpl;
 
                 @Override
@@ -67,30 +49,26 @@ public interface Adapter<A, B> {
 
                 @Override
                 public H toA(A val) {
-                    try {
-                        return (H) MH_HandleAbstraction_handle.invoke(val);
-                    } catch (Throwable e) {
-                        throw new RuntimeException(e);
-                    }
+                    return ((HandleAbstraction<H>) val).handle();
                 }
 
                 @Override
                 public A toB(H val) {
-                    if (implClass == null) {
-                        implClass = AbstractionManager.getInstance().getImplByClass(abstractionClass);
-                        if (implClass == null)
-                            throw new RuntimeException("Could not find impl class for " + abstractionClass);
-                    }
-
                     try {
-                        if (constructImpl == null) {
+                        if (implClass == null) {
+                            // find impl class if not already done
+                            implClass = AbstractionManager.getInstance().getImplByClass(abstractionClass);
+                            if (implClass == null)
+                                throw new RuntimeException("Could not find impl class for " + abstractionClass);
+
+                            // assume the presence of a (Handle;)V constructor
                             constructImpl = ReflectUtil.getInternalLookup()
                                     .findConstructor(implClass, MethodType.methodType(void.class, handleClass));
                         }
 
                         return (A) constructImpl.invoke(val);
                     } catch (Throwable e) {
-                        throw new RuntimeException(e);
+                        throw new RuntimeException("" + e);
                     }
                 }
             };
@@ -99,9 +77,34 @@ public interface Adapter<A, B> {
         }
     }
 
+    /**
+     * Get the runtime type of class A.
+     *
+     * @return The class object for A.
+     */
     Class<? extends A> aClass();
+
+    /**
+     * Get the runtime type of class B.
+     *
+     * @return The class object for B;
+     */
     Class<? extends B> bClass();
 
+    /**
+     * Convert the given value B to type A.
+     *
+     * @param val B.
+     * @return A.
+     */
     A toA(B val);
+
+    /**
+     * Convert the given value A to type B.
+     *
+     * @param val A.
+     * @return B.
+     */
     B toB(A val);
+
 }
