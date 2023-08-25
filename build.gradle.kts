@@ -19,7 +19,7 @@ apply(plugin = "maven-publish")
 apply(plugin = "java-library")
 
 group = "tools.redstone"
-version = "1.0"
+version = "1.1"
 
 java {
     sourceCompatibility = JavaVersion.VERSION_16
