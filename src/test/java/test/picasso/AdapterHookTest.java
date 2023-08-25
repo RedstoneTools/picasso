@@ -52,8 +52,8 @@ public class AdapterHookTest {
 
     {
         // setup adapters
-        AdapterRegistry.getInstance().register(Adapter.handle(InternalA.class, A.class));
-        AdapterRegistry.getInstance().register(Adapter.handle(InternalB.class, B.class));
+        AdapterRegistry.registerHandleAdapter(InternalA.class, A.class);
+        AdapterRegistry.registerHandleAdapter(InternalA.class, B.class);
     }
 
     @TestSystem.Test(autoRegisterImpls = true)
