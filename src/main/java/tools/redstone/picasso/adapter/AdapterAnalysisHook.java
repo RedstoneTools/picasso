@@ -66,8 +66,6 @@ public class AdapterAnalysisHook implements ClassAnalysisHook {
                     Type srcAsmType = Type.getType(srcType);
                     if (srcAsmType.getSort() == Type.OBJECT)
                         context.abstractionProvider().findClass(srcAsmType.getClassName());
-                    if (srcAsmType.getSort() == Type.METHOD)
-                        srcType = srcAsmType.getReturnType().toString();
 
                     // push tracked return value
                     var trackedReturnValue = new TrackedReturnValue(new ComputeStack.ReturnValue(info, TYPE_Object, TYPE_Object.toString()));
@@ -89,7 +87,6 @@ public class AdapterAnalysisHook implements ClassAnalysisHook {
                     }
 
                     boolean finalCreated = created;
-                    String finalSrcType = srcType;
                     var clinitInsn = new InsnNode(-1) {
                         @Override
                         public void accept(MethodVisitor v) {
@@ -98,7 +95,7 @@ public class AdapterAnalysisHook implements ClassAnalysisHook {
                                 return;
 
                             v.visitMethodInsn(Opcodes.INVOKESTATIC, TYPE_AdapterRegistry.getInternalName(), "getInstance", "()L" + TYPE_AdapterRegistry.getInternalName() + ";", false);
-                            v.visitLdcInsn(finalSrcType);
+                            v.visitLdcInsn(srcAsmType);
                             v.visitLdcInsn(dstType);
                             v.visitMethodInsn(Opcodes.INVOKEVIRTUAL, TYPE_AdapterRegistry.getInternalName(), "lazyRequireMonoDirectional", "(Ljava/lang/String;Ljava/lang/String;)" + TYPE_Function.getDescriptor(), false);
                             v.visitFieldInsn(Opcodes.PUTSTATIC, currMethod.internalClassName(), fieldName, TYPE_Function.getDescriptor());
@@ -115,7 +112,7 @@ public class AdapterAnalysisHook implements ClassAnalysisHook {
                         // the dst type still has not been determined we throw an error
                         String dstType = trackedReturnValue.dstType;
                         if (dstType == null)
-                            throw new IllegalStateException("Could not determine dst type for `adapt(value)` call in " + currMethod + " with src type `" + finalSrcType + "`");
+                            throw new IllegalStateException("Could not determine dst type for `adapt(value)` call in " + currMethod + " with src type `" + srcAsmType + "`");
 
                         // load the dst class
                         Type dstAsmType = Type.getType(dstType);
@@ -123,8 +120,8 @@ public class AdapterAnalysisHook implements ClassAnalysisHook {
                             context.abstractionProvider().findClass(dstAsmType.getClassName());
 
                         // check if the adapter exists
-                        if (adapterRegistry.findMonoDirectional(finalSrcType, dstType) == null)
-                            throw new IllegalStateException("No adapter found for src = " + finalSrcType + ", dst = " + dstType + " in method " + currMethod);
+                        if (adapterRegistry.findMonoDirectional(srcAsmType, dstAsmType) == null)
+                            throw new IllegalStateException("No adapter found for src = " + srcAsmType + ", dst = " + dstAsmType + " in method " + currMethod);
 
                         // pop original instance variable after
                         if (!isStatic) {

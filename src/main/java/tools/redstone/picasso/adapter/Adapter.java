@@ -31,7 +31,7 @@ public interface Adapter<A, B> {
      * @return The adapter for A -> H.
      */
     @SuppressWarnings("unchecked")
-    static <A, H> Adapter<H, A> handle(Class<H> handleClass, Class<A> abstractionClass) {
+    static <A, H> Adapter<H, A> forHandleAbstraction(Class<H> handleClass, Class<A> abstractionClass) {
         try {
             return new Adapter<>() {
                 Class<?> implClass;
