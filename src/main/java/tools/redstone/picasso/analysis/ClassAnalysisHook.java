@@ -31,6 +31,8 @@ public interface ClassAnalysisHook {
         default boolean visitTypeInsn(AnalysisContext ctx, int opcode, Type type) { return false; }
         default boolean visitVarInsn(AnalysisContext ctx, int opcode, int varIndex, Type type, String signature) { return false; }
         default boolean visitFieldInsn(AnalysisContext ctx, int opcode, ReferenceInfo fieldInfo) { return false; }
+
+        default void visitEnd() { }
     }
 
     // When this hook is registered to the given provider

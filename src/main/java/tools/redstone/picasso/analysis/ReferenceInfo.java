@@ -1,5 +1,6 @@
 package tools.redstone.picasso.analysis;
 
+import org.objectweb.asm.Handle;
 import org.objectweb.asm.Type;
 import tools.redstone.picasso.AbstractionProvider;
 import tools.redstone.picasso.util.asm.ASMUtil;

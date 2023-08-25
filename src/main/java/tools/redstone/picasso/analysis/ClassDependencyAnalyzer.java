@@ -8,6 +8,7 @@ import tools.redstone.picasso.AbstractionProvider;
 import tools.redstone.picasso.usage.NotImplementedException;
 import tools.redstone.picasso.usage.Usage;
 import tools.redstone.picasso.util.asm.ASMUtil;
+import tools.redstone.picasso.util.asm.ComputeStack;
 import tools.redstone.picasso.util.data.CollectionUtil;
 import tools.redstone.picasso.util.data.Container;
 import tools.redstone.picasso.util.asm.MethodWriter;
@@ -44,14 +45,13 @@ public class ClassDependencyAnalyzer {
     }
 
     /* Stack Tracking */
-    public interface StackValue { Type type(); default String signature() { return null; } }
-    public record FieldValue(ReferenceInfo fieldInfo, boolean isStatic) implements StackValue { @Override public Type type() { return fieldInfo.type(); }@Override public String signature() { return fieldInfo.signature(); }}
-    public record InstanceOf(Type type) implements StackValue { }
-    public record ReturnValue(ReferenceInfo method, Type type, String signature) implements StackValue { public static ReturnValue of(ReferenceInfo info) { return new ReturnValue(info, info.type().getReturnType(), info.signature()); } }
-    public record FromVar(int varIndex, Type type, String signature) implements StackValue { }
-
-    /* Compute Stack Tracking */
-    public record Lambda(boolean direct, ReferenceInfo methodInfo, Container<Boolean> discard) { }
+    /** Represents a lambda value made using invokedynamic */
+    public record Lambda(boolean direct, ReferenceInfo methodInfo, Container<Boolean> discard) implements ComputeStack.Value {
+        @Override
+        public Type type() {
+            return null; // todo
+        }
+    }
 
     static final Type TYPE_Usage = Type.getType(Usage.class);
     static final String NAME_Usage = TYPE_Usage.getInternalName();
@@ -188,7 +188,7 @@ public class ClassDependencyAnalyzer {
         classAnalysis.analyzedMethods.put(currentMethodInfo, currentMethodAnalysis);
 
         // Tries to estimate/track the current compute stack
-        final ExStack<Object> computeStack = new ExStack<>();
+        final ComputeStack computeStack = new ComputeStack();
 
         context.enteredMethod(currentMethodInfo, computeStack);
         for (var hook : hooks) hook.enterMethod(context);
@@ -204,7 +204,12 @@ public class ClassDependencyAnalyzer {
             CollectionUtil.addIfNotNull(methodVisitorHooks, hook.visitMethod(context, mWriter));
 
         // create method visitor
-        var visitor = new MethodVisitor(ASMUtil.ASM_V, newMethod) {
+        var visitor = new ComputeStack.TrackingMethodVisitor<MethodWriter>(
+                new MethodWriter(newMethod, newMethod),
+                computeStack,
+                oldMethod,
+                currentMethodInfo
+        ) {
             boolean endVisited = false;
 
             public void addInsn(InsnNode node) {
@@ -281,7 +286,7 @@ public class ClassDependencyAnalyzer {
                     analysis.referenceOptional(context);
 
                     List<ReferenceInfo> dependencies = lambda.direct() ?
-                            List.of(lambda.methodInfo) :
+                            List.of(lambda.methodInfo()) :
                             analysis.requiredDependencies;
                     if (dependencies != null) {
                         dependencies.forEach(dep ->
@@ -303,17 +308,17 @@ public class ClassDependencyAnalyzer {
                         if (!allImplemented) {
                             // the methods are not all implemented,
                             // substitute call with notPresentOptional
-                            super.visitMethodInsn(
+                            parent.visitMethodInsn(
                                     Opcodes.INVOKESTATIC,
                                     NAME_InternalSubstituteMethods, "notPresentOptional",
                                     "(Ljava/util/function/Supplier;)Ljava/util/Optional;", false
                             );
                         } else {
                             // the methods are implemented, dont substitute
-                            super.visitMethodInsn(opcode, owner, name, descriptor, isInterface);
+                            parent.visitMethodInsn(opcode, owner, name, descriptor, isInterface);
                         }
 
-                        computeStack.push(ReturnValue.of(calledMethodInfo));
+                        computeStack.push(ComputeStack.ReturnValue.of(calledMethodInfo));
                         return;
                     }
 
@@ -322,17 +327,17 @@ public class ClassDependencyAnalyzer {
                         if (!allImplemented) {
                             // the methods are not all implemented,
                             // substitute call with notPresentBoolean
-                            super.visitMethodInsn(
+                            parent.visitMethodInsn(
                                     Opcodes.INVOKESTATIC,
                                     NAME_InternalSubstituteMethods, "notPresentBoolean",
                                     "(Ljava/lang/Runnable;)B", false
                             );
                         } else {
                             // the methods are implemented, dont substitute
-                            super.visitMethodInsn(opcode, owner, name, descriptor, isInterface);
+                            parent.visitMethodInsn(opcode, owner, name, descriptor, isInterface);
                         }
 
-                        computeStack.push(ReturnValue.of(calledMethodInfo));
+                        computeStack.push(ComputeStack.ReturnValue.of(calledMethodInfo));
                         return;
                     }
 
@@ -342,7 +347,7 @@ public class ClassDependencyAnalyzer {
                 // check for Usage.oneOf(Optional<T>...)
                 if (NAME_Usage.equals(owner) && "either".equals(name) && "([Ljava/util/function/Supplier;)Ljava/lang/Object;".equals(descriptor)) {
                     // get array of lambdas
-                    Lambda[] lambdas = ReflectUtil.arrayCast((Object[]) computeStack.pop(), Lambda.class);
+                    Lambda[] lambdas = ReflectUtil.arrayCast(computeStack.expectAndPop(ComputeStack.Array.class).array(), Lambda.class);
                     Lambda chosen = null;                                            // The chosen lambda
                     List<ReferenceDependency> chosenDependencies = new ArrayList<>();   // The method dependencies of the chosen lambda
                     List<ReferenceDependency> optionalDependencies = new ArrayList<>(); // The optional dependencies of this switch
@@ -350,11 +355,11 @@ public class ClassDependencyAnalyzer {
                     for (int n = lambdas.length; i < n; i++) {
                         Lambda lambda = lambdas[i];
                         ReferenceAnalysis analysis;
-                        analysis = publicReference(context, lambda.methodInfo);
+                        analysis = publicReference(context, lambda.methodInfo());
 
                         // get dependencies as methods
                         List<ReferenceInfo> dependencies = lambda.direct() ?
-                                List.of(lambda.methodInfo) :
+                                List.of(lambda.methodInfo()) :
                                 analysis.requiredDependencies;
 
                         // if not implemented, add as optional dependencies
@@ -381,16 +386,16 @@ public class ClassDependencyAnalyzer {
                     // replace method call
                     if (chosen != null) {
                         // push index into supplier array
-                        super.visitIntInsn(Opcodes.SIPUSH, i);
+                        parent.visitIntInsn(Opcodes.SIPUSH, i);
 
-                        super.visitMethodInsn(Opcodes.INVOKESTATIC, NAME_InternalSubstituteMethods,
+                        parent.visitMethodInsn(Opcodes.INVOKESTATIC, NAME_InternalSubstituteMethods,
                                 "onePresent", "([Ljava/util/function/Supplier;I)Ljava/lang/Object;",
                                 false);
                     } else {
                         // add unimplemented dependency
                         currentMethodAnalysis.registerReference(ReferenceInfo.unimplemented());
 
-                        super.visitMethodInsn(Opcodes.INVOKESTATIC, NAME_InternalSubstituteMethods,
+                        parent.visitMethodInsn(Opcodes.INVOKESTATIC, NAME_InternalSubstituteMethods,
                                 "nonePresent", "([Ljava/util/function/Supplier;)Ljava/lang/Object;",
                                 false);
                     }
@@ -433,22 +438,12 @@ public class ClassDependencyAnalyzer {
                 }
 
                 super.visitMethodInsn(opcode, owner, name, descriptor, isInterface);
-                Type mt = Type.getMethodType(descriptor);
-                if (opcode != Opcodes.INVOKESTATIC)
-                    computeStack.pop(); // instance on the stack
-                for (int i = 0, n = mt.getArgumentTypes().length; i < n; i++) {
-                    computeStack.pop();
-                }
-
-                if (!mt.getReturnType().equals(Type.VOID_TYPE)) {
-                    computeStack.push(ReturnValue.of(calledMethodInfo));
-                }
             }
 
             @Override
             public void visitTypeInsn(int opcode, String type) {
                 Type type1 = Type.getObjectType(type);
-                /* Check for hook intercepts */
+                /* Visit hooks */
                 for (var vh : methodVisitorHooks) {
                     if (vh.visitTypeInsn(context, opcode, type1)) {
                         return;
@@ -456,25 +451,11 @@ public class ClassDependencyAnalyzer {
                 }
 
                 super.visitTypeInsn(opcode, type);
-                if (opcode == Opcodes.ANEWARRAY) {
-                    int size = (int) computeStack.pop();
-                    computeStack.push(new Object[size]);
-                }
-
-                if (opcode == Opcodes.NEW) {
-                    computeStack.push(new InstanceOf(Type.getObjectType(type)));
-                }
-
-                if (opcode == Opcodes.CHECKCAST) {
-                    if (!computeStack.isEmpty())
-                        computeStack.pop();
-                    computeStack.push(new InstanceOf(Type.getObjectType(type)));
-                }
             }
 
             @Override
             public void visitFieldInsn(int opcode, String owner, String name, String descriptor) {
-                /* Check for hook intercepts */
+                /* Visit hooks */
                 var fieldNode = owner.equals(internalName) ? ASMUtil.findField(classNode, name) : null;
                 var fieldInfo = ReferenceInfo.forFieldInfo(owner, name, descriptor,
                         fieldNode != null ? fieldNode.signature : null, opcode == Opcodes.GETSTATIC);
@@ -490,7 +471,7 @@ public class ClassDependencyAnalyzer {
                         computeStack.pop();
                     }
 
-                    computeStack.push(new FieldValue(fieldInfo, false));
+                    computeStack.push(new ComputeStack.FieldValue(fieldInfo));
 
                     // register reference
                     var analysis = publicReference(context, fieldInfo);
@@ -524,7 +505,7 @@ public class ClassDependencyAnalyzer {
                         currentMethodAnalysis.requiredDependencies.add(fieldInfo);
                     }
 
-                    super.visitFieldInsn(opcode, owner, name, descriptor);
+                    parent.visitFieldInsn(opcode, owner, name, descriptor);
                     return;
                 }
 
@@ -533,12 +514,7 @@ public class ClassDependencyAnalyzer {
 
             @Override
             public void visitVarInsn(int opcode, int varIndex) {
-                if (!isThisMethodStatic && varIndex == 0) {
-                    super.visitVarInsn(opcode, varIndex);
-                    computeStack.push(new InstanceOf(Type.getObjectType(currentMethodInfo.internalClassName())));
-                    return;
-                }
-
+                /* Visit hooks */
                 Type t = Type.getType(oldMethod.localVariables.get(varIndex).desc);
                 String sig = oldMethod.localVariables.get(varIndex).signature;
                 for (var vh : methodVisitorHooks) {
@@ -548,15 +524,11 @@ public class ClassDependencyAnalyzer {
                 }
 
                 super.visitVarInsn(opcode, varIndex);
-                switch (opcode) {
-                    case Opcodes.ALOAD, Opcodes.ILOAD, Opcodes.DLOAD, Opcodes.FLOAD -> computeStack.push(new FromVar(varIndex, t, sig));
-                    case Opcodes.ASTORE, Opcodes.ISTORE, Opcodes.DSTORE, Opcodes.FSTORE -> computeStack.pop();
-                }
             }
 
-            @Override public void visitLdcInsn(Object value) { super.visitLdcInsn(value); computeStack.push(value); }
-            @Override public void visitIntInsn(int opcode, int operand) { super.visitIntInsn(opcode, operand); computeStack.push(operand); }
-            @Override public void visitInsn(int opcode) {
+            @Override
+            public void visitInsn(int opcode) {
+                /* Visit hooks */
                 for (var vh : methodVisitorHooks) {
                     if (vh.visitInsn(context, opcode)) {
                         return;
@@ -564,24 +536,6 @@ public class ClassDependencyAnalyzer {
                 }
 
                 super.visitInsn(opcode);
-                switch (opcode) {
-                    case Opcodes.DUP -> computeStack.push(computeStack.peek());
-                    case Opcodes.ACONST_NULL -> computeStack.push(null);
-                    case Opcodes.ICONST_0 -> computeStack.push(0);
-                    case Opcodes.ICONST_1 -> computeStack.push(1);
-                    case Opcodes.ICONST_2 -> computeStack.push(2);
-                    case Opcodes.ICONST_3 -> computeStack.push(3);
-                    case Opcodes.ICONST_4 -> computeStack.push(4);
-                    case Opcodes.ICONST_5 -> computeStack.push(5);
-                    case Opcodes.POP, Opcodes.ARETURN, Opcodes.IRETURN, Opcodes.DRETURN, Opcodes.FRETURN -> { if (!computeStack.isEmpty()) computeStack.pop(); }
-                    case Opcodes.POP2 -> { computeStack.pop(); computeStack.pop(); }
-                    case Opcodes.AASTORE -> {
-                        Object val = computeStack.pop();
-                        int idx = (int) computeStack.pop();
-                        Object[] arr = (Object[]) computeStack.pop();
-                        arr[idx] = val;
-                    }
-                }
             }
 
             @Override
@@ -589,6 +543,7 @@ public class ClassDependencyAnalyzer {
                 if (endVisited) return;
                 endVisited = true;
 
+                for (var hook : methodVisitorHooks) hook.visitEnd();
                 for (var hook : hooks) hook.leaveMethod(context);
                 context.leaveMethod();
                 currentMethodAnalysis.complete = true;

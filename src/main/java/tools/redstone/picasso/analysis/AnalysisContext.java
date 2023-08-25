@@ -1,6 +1,7 @@
 package tools.redstone.picasso.analysis;
 
 import tools.redstone.picasso.AbstractionProvider;
+import tools.redstone.picasso.util.asm.ComputeStack;
 import tools.redstone.picasso.util.data.ExStack;
 
 import java.io.PrintStream;
@@ -19,7 +20,7 @@ public class AnalysisContext {
     public final Stack<ReferenceInfo> analysisStack = new Stack<>();
 
     // The current compute stacks from the methods.
-    final Stack<ExStack<Object>> computeStacks = new Stack<>();
+    final Stack<ComputeStack> computeStacks = new Stack<>();
 
     public AnalysisContext(AbstractionProvider abstractionProvider) {
         this.abstractionProvider = abstractionProvider;
@@ -33,7 +34,7 @@ public class AnalysisContext {
 
     // Updates the context when entering a method, assumes shits already on the stacks.
     void enteredMethod(ReferenceInfo info,
-                       ExStack<Object> computeStack) {
+                       ComputeStack computeStack) {
         analysisStack.push(info);
         computeStacks.push(computeStack);
     }
@@ -63,7 +64,7 @@ public class AnalysisContext {
     }
 
     /** Gets the current compute stack */
-    public ExStack<Object> currentComputeStack() {
+    public ComputeStack currentComputeStack() {
         if (computeStacks.isEmpty())
             return null;
         return computeStacks.peek();

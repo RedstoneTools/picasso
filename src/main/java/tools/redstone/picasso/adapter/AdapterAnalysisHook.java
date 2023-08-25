@@ -8,6 +8,7 @@ import org.objectweb.asm.tree.MethodNode;
 import tools.redstone.picasso.AbstractionProvider;
 import tools.redstone.picasso.analysis.*;
 import tools.redstone.picasso.util.asm.ASMUtil;
+import tools.redstone.picasso.util.asm.ComputeStack;
 import tools.redstone.picasso.util.asm.MethodWriter;
 
 import java.util.function.Function;
@@ -28,12 +29,22 @@ public class AdapterAnalysisHook implements ClassAnalysisHook {
         inheritanceChecker = AbstractionProvider.ClassInheritanceChecker.forClass(adaptMethodOwner);
     }
 
-    static class TrackedReturnValue {
-        final ClassDependencyAnalyzer.ReturnValue returnValue; // The analyzer return value
+    static class TrackedReturnValue implements ComputeStack.Value {
+        final ComputeStack.ReturnValue returnValue; // The analyzer return value
         String dstType;                                        // The destination type
 
-        TrackedReturnValue(ClassDependencyAnalyzer.ReturnValue returnValue) {
+        TrackedReturnValue(ComputeStack.ReturnValue returnValue) {
             this.returnValue = returnValue;
+        }
+
+        @Override
+        public Type type() {
+            return returnValue.type();
+        }
+
+        @Override
+        public String signature() {
+            return returnValue.signature();
         }
     }
 
@@ -49,7 +60,7 @@ public class AdapterAnalysisHook implements ClassAnalysisHook {
                     boolean isStatic = opcode == Opcodes.INVOKESTATIC;
                     Object instanceValue = isStatic ? context.currentComputeStack().pop() : null;
                     Object srcValue = context.currentComputeStack().pop();
-                    String srcType = ((ClassDependencyAnalyzer.StackValue)srcValue).signature();
+                    String srcType = ((ComputeStack.Value)srcValue).signature();
 
                     // load the src class
                     Type srcAsmType = Type.getType(srcType);
@@ -59,7 +70,7 @@ public class AdapterAnalysisHook implements ClassAnalysisHook {
                         srcType = srcAsmType.getReturnType().toString();
 
                     // push tracked return value
-                    var trackedReturnValue = new TrackedReturnValue(new ClassDependencyAnalyzer.ReturnValue(info, TYPE_Object, TYPE_Object.toString()));
+                    var trackedReturnValue = new TrackedReturnValue(new ComputeStack.ReturnValue(info, TYPE_Object, TYPE_Object.toString()));
                     context.currentComputeStack().push(trackedReturnValue);
 
                     // add field to class
@@ -141,7 +152,7 @@ public class AdapterAnalysisHook implements ClassAnalysisHook {
             public boolean visitVarInsn(AnalysisContext ctx, int opcode, int varIndex, Type type, String signature) {
                 if (opcode == Opcodes.ASTORE && ctx.currentComputeStack().peek() instanceof TrackedReturnValue rv) {
                     ctx.currentComputeStack().pop();
-                    ctx.currentComputeStack().push(new ClassDependencyAnalyzer.FromVar(varIndex, type, signature));
+                    ctx.currentComputeStack().push(new ComputeStack.LocalValue(varIndex, type, signature, null));
 
                     rv.dstType = signature;
                     return true;
@@ -180,7 +191,7 @@ public class AdapterAnalysisHook implements ClassAnalysisHook {
             public boolean visitTypeInsn(AnalysisContext ctx, int opcode, Type type) {
                 if (opcode == Opcodes.CHECKCAST && ctx.currentComputeStack().peekOrNull() instanceof TrackedReturnValue rv) {
                     ctx.currentComputeStack().pop();
-                    ctx.currentComputeStack().push(new ClassDependencyAnalyzer.InstanceOf(type));
+                    ctx.currentComputeStack().push(new ComputeStack.InstanceOf(type));
 
                     rv.dstType = type.getDescriptor();
                     return true;
