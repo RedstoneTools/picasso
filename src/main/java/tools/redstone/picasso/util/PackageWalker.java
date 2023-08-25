@@ -56,10 +56,6 @@ public class PackageWalker {
         }
     }
 
-    public static PackageWalker walker(Class<?> codeSource, String pkg) {
-        return new PackageWalker(codeSource, pkg);
-    }
-
     private final Path codeSourcePath; // The path of the code source as provided by the protection domain of the owner class
     private final String pkg;          // The name of the package to walk and find resources in
 

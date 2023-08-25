@@ -9,7 +9,7 @@ import tools.redstone.picasso.adapter.AdapterRegistry;
 import tools.redstone.picasso.analysis.Dependency;
 import tools.redstone.picasso.analysis.ClassAnalysisHook;
 import tools.redstone.picasso.analysis.ReferenceDependency;
-import tools.redstone.picasso.analysis.RequireOneDependency;
+import tools.redstone.picasso.analysis.SwitchDependency;
 import tools.redstone.picasso.usage.Abstraction;
 import tools.redstone.picasso.util.PackageWalker;
 import tools.redstone.picasso.util.ReflectUtil;
@@ -329,7 +329,7 @@ public class TestSystem {
             // check for none present
             if (split[0].equals("none")) {
                 for (Dependency dep : list) {
-                    if (!(dep instanceof RequireOneDependency dependency)) continue;
+                    if (!(dep instanceof SwitchDependency dependency)) continue;
                     if (!dependency.implemented()) {
                         found = dependency;
                         break;
@@ -342,7 +342,7 @@ public class TestSystem {
                         .toList();
 
                 for (Dependency dep : list) {
-                    if (!(dep instanceof RequireOneDependency dependency)) continue;
+                    if (!(dep instanceof SwitchDependency dependency)) continue;
                     if (isDependenciesEqual(dependency.dependencies(), dependencies.toArray(new String[0]))) {
                         found = dependency;
                         break;

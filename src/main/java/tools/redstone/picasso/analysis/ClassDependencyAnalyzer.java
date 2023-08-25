@@ -13,7 +13,6 @@ import tools.redstone.picasso.util.data.CollectionUtil;
 import tools.redstone.picasso.util.data.Container;
 import tools.redstone.picasso.util.asm.MethodWriter;
 import tools.redstone.picasso.util.ReflectUtil;
-import tools.redstone.picasso.util.data.ExStack;
 
 import java.lang.reflect.Modifier;
 import java.util.*;
@@ -28,31 +27,16 @@ public class ClassDependencyAnalyzer {
 
     static final Set<String> specialMethods = Set.of("unimplemented", "isImplemented", "<init>");     // Special methods on abstractions
 
-    // The result of the dependency analysis on a class
-    public class ClassAnalysis {
-        public boolean completed = false;                                                     // Whether this analysis is complete
-        public boolean running = false;
-        public final Map<ReferenceInfo, ReferenceAnalysis> analyzedMethods = new HashMap<>(); // All analysis objects for the methods in this class
-        public List<Dependency> dependencies = new ArrayList<>();                             // All dependencies recorded in this class
-
-        // Check whether all direct and switch dependencies are implemented
-        public boolean areAllImplemented() {
-            for (Dependency dep : dependencies)
-                if (!dep.isImplemented(abstractionProvider))
-                    return false;
-            return true;
-        }
-    }
-
     /* Stack Tracking */
     /** Represents a lambda value made using invokedynamic */
     public record Lambda(boolean direct, ReferenceInfo methodInfo, Container<Boolean> discard) implements ComputeStack.Value {
         @Override
         public Type type() {
-            return null; // todo
+            return null; // maybe todo
         }
     }
 
+    /* Symbols */
     static final Type TYPE_Usage = Type.getType(Usage.class);
     static final String NAME_Usage = TYPE_Usage.getInternalName();
     static final Type TYPE_InternalSubstituteMethods = Type.getType(Usage.InternalSubstituteMethods.class);
@@ -62,23 +46,30 @@ public class ClassDependencyAnalyzer {
     static final Type TYPE_MethodInfo = Type.getType(ReferenceInfo.class);
     static final String NAME_MethodInfo = TYPE_MethodInfo.getInternalName();
 
-    private final AbstractionProvider abstractionProvider;                  // The abstraction manager
-    private String internalName;                                          // The internal name of this class
-    private String className;                                             // The public name of this class
-    private ClassReader classReader;                                      // The class reader for the bytecode
-    private ClassNode classNode;                                          // The class node to be written
-    public final List<ClassAnalysisHook> hooks = new ArrayList<>();  // The analysis hooks
+    protected final AbstractionProvider abstractionProvider;        // The abstraction manager
+    protected String internalName;                                  // The internal name of this class
+    protected String className;                                     // The public name of this class
+    protected ClassReader classReader;                              // The class reader for the bytecode
+    protected ClassNode classNode;                                  // The class node to be written
+    public final List<ClassAnalysisHook> hooks = new ArrayList<>(); // The analysis hooks
 
-    private ClassAnalysis classAnalysis = new ClassAnalysis(); // The result of analysis
+    protected ClassAnalysis classAnalysis = new ClassAnalysis(this); // The result of analysis
 
+    // Register an analysis hook to this analyzer only
     public ClassDependencyAnalyzer addHook(ClassAnalysisHook hook) {
         this.hooks.add(hook);
         return this;
     }
 
-    public ClassDependencyAnalyzer(AbstractionProvider manager,
+    /**
+     * Creates a new dependency analyzer for the given class reader.
+     *
+     * @param provider The abstraction provider.
+     * @param classReader The class file reader.
+     */
+    public ClassDependencyAnalyzer(AbstractionProvider provider,
                                    ClassReader classReader) {
-        this.abstractionProvider = manager;
+        this.abstractionProvider = provider;
         if (classReader != null) {
             this.internalName = classReader.getClassName();
             this.className = internalName.replace('/', '.');
@@ -89,7 +80,7 @@ public class ClassDependencyAnalyzer {
     }
 
     // Make a ReferenceInfo to a method on the stack
-    private static void makeMethodInfo(MethodVisitor visitor, String owner, String name, String desc, boolean isStatic) {
+    private static void visitMakeMethodInfo(MethodVisitor visitor, String owner, String name, String desc, boolean isStatic) {
         visitor.visitLdcInsn(owner);
         visitor.visitLdcInsn(name);
         visitor.visitLdcInsn(desc);
@@ -99,7 +90,7 @@ public class ClassDependencyAnalyzer {
     }
 
     // Make a ReferenceInfo to a field on the stack
-    private static void makeFieldInfo(MethodVisitor visitor, String owner, String name, String desc, boolean isStatic) {
+    private static void visitMakeFieldInfo(MethodVisitor visitor, String owner, String name, String desc, boolean isStatic) {
         visitor.visitLdcInsn(owner);
         visitor.visitLdcInsn(name);
         visitor.visitLdcInsn(desc);
@@ -131,10 +122,10 @@ public class ClassDependencyAnalyzer {
             }
 
             // find method node
-            MethodNode m = ASMUtil.findMethod(classNode, info.name(), info.desc());
+            MethodNode m = ASMUtil.findMethod(classNode, info.name(), info.descriptor());
             if (m == null) {
                 // return partial
-                // todo: try to find in super class or smth
+                // todo: try to find in super class or something
                 return abstractionProvider.makePartial(info);
             }
 
@@ -177,7 +168,7 @@ public class ClassDependencyAnalyzer {
      */
     public MethodVisitor methodVisitor(AnalysisContext context, ReferenceInfo currentMethodInfo, ReferenceAnalysis currentMethodAnalysis, MethodNode oldMethod) {
         String name = currentMethodInfo.name();
-        String descriptor = currentMethodInfo.desc();
+        String descriptor = currentMethodInfo.descriptor();
 
         // check old method
         if (oldMethod == null) {
@@ -381,7 +372,7 @@ public class ClassDependencyAnalyzer {
                     }
 
                     // register switch
-                    classAnalysis.dependencies.add(new RequireOneDependency(chosenDependencies, optionalDependencies, chosen != null));
+                    classAnalysis.dependencies.add(new SwitchDependency(chosenDependencies, optionalDependencies, chosen != null));
 
                     // replace method call
                     if (chosen != null) {
@@ -425,7 +416,7 @@ public class ClassDependencyAnalyzer {
                                     if (currentMethodAnalysis.optionalReferenceNumber < 0) {
                                         mv.visitTypeInsn(Opcodes.NEW, NAME_NotImplementedException);
                                         mv.visitInsn(Opcodes.DUP);
-                                        makeMethodInfo(mv, calledMethodInfo.internalClassName(), calledMethodInfo.name(), calledMethodInfo.desc(), calledMethodInfo.isStatic());
+                                        visitMakeMethodInfo(mv, calledMethodInfo.internalClassName(), calledMethodInfo.name(), calledMethodInfo.descriptor(), calledMethodInfo.isStatic());
                                         mv.visitMethodInsn(Opcodes.INVOKESPECIAL, NAME_NotImplementedException, "<init>", "(L" + NAME_MethodInfo + ";)V", false);
                                         mv.visitInsn(Opcodes.ATHROW);
                                     }
@@ -493,7 +484,7 @@ public class ClassDependencyAnalyzer {
                                         if (currentMethodAnalysis.optionalReferenceNumber < 0) {
                                             mv.visitTypeInsn(Opcodes.NEW, NAME_NotImplementedException);
                                             mv.visitInsn(Opcodes.DUP);
-                                            makeFieldInfo(mv, fieldInfo.internalClassName(), fieldInfo.name(), fieldInfo.desc(), fieldInfo.isStatic());
+                                            visitMakeFieldInfo(mv, fieldInfo.internalClassName(), fieldInfo.name(), fieldInfo.descriptor(), fieldInfo.isStatic());
                                             mv.visitMethodInsn(Opcodes.INVOKESPECIAL, NAME_NotImplementedException, "<init>", "(L" + NAME_MethodInfo + ";)V", false);
                                             mv.visitInsn(Opcodes.ATHROW);
                                         }

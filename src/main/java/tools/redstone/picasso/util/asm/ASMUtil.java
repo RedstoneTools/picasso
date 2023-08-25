@@ -30,7 +30,7 @@ public class ASMUtil {
     }
 
     public static MethodNode findMethod(ClassNode node, ReferenceInfo info) {
-        return findMethod(node, info.name(), info.desc());
+        return findMethod(node, info.name(), info.descriptor());
     }
 
     public static FieldNode findField(ClassNode node, String name) {

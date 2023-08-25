@@ -23,13 +23,16 @@ public class CollectionUtil {
         return false;
     }
 
-    public static <T, T2> List<T2> mapImmediate(List<T> list, Function<T, T2> mapper) {
-        final List<T2> res = new ArrayList<>(list.size());
-        for (int i = 0, n = list.size(); i < n; i++)
-            res.add(mapper.apply(list.get(i)));
-        return res;
-    }
-
+    /**
+     * Immediately map the elements from the given collection to the elements in
+     * the provided destination collections using the given mapping function.
+     *
+     * @param list The source collection.
+     * @param mapper The mapping function.
+     * @param dest The destination collections.
+     * @param <T> The source type.
+     * @param <T2> The destination type.
+     */
     @SafeVarargs
     public static <T, T2> void mapImmediate(Collection<T> list, Function<T, T2> mapper, Collection<? super T2>... dest) {
         for (T v1 : list) {

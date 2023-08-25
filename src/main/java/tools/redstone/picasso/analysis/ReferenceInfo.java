@@ -9,7 +9,12 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.util.Objects;
 
-// ASM method/field information
+/**
+ * Describes a reference to a symbol, most often in the bytecode.
+ *
+ * This can currently describe a field, method, class or, in certain
+ * cases, a special `unimplemented` reference.
+ */
 public class ReferenceInfo {
 
     final String internalClassName; // The internal (/) owning/referenced class name
@@ -46,22 +51,27 @@ public class ReferenceInfo {
         this.type = type1;
     }
 
+    /** Get the internal (/) name of this class or the owner of this symbol */
     public String internalClassName() {
         return internalClassName;
     }
 
+    /** Get the public (.) name of this class or the owner of this symbol */
     public String className() {
         return className;
     }
 
+    /** Get the name of this symbol */
     public String name() {
         return name;
     }
 
-    public String desc() {
+    /** Get the ASM/bytecode descriptor */
+    public String descriptor() {
         return desc;
     }
 
+    /** Get the ASM type from the descriptor */
     public Type type() {
         return asmType;
     }
@@ -70,6 +80,7 @@ public class ReferenceInfo {
         return signature;
     }
 
+    /** Check whether this reference describes a static access/symbol */
     public boolean isStatic() {
         return isStatic;
     }

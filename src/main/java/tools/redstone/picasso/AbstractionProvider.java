@@ -12,7 +12,6 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.util.*;
 import java.util.function.Predicate;
-import java.util.stream.Stream;
 
 /**
  * Provides systems, like dependency analysis and class
@@ -339,7 +338,7 @@ public class AbstractionProvider {
      * @param klass The class.
      * @return The analysis.
      */
-    public ClassDependencyAnalyzer.ClassAnalysis getClassAnalysis(Class<?> klass) {
+    public ClassAnalysis getClassAnalysis(Class<?> klass) {
         var analyzer = analyzer(klass);
         if (analyzer == null || !analyzer.getClassAnalysis().completed)
             return null;

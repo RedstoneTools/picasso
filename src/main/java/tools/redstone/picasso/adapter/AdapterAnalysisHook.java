@@ -168,7 +168,7 @@ public class AdapterAnalysisHook implements ClassAnalysisHook {
                     if (opcode == Opcodes.PUTFIELD) ctx.currentComputeStack().pop();
                     ctx.currentComputeStack().pop();
 
-                    rv.dstType = fieldInfo.signature() == null ? fieldInfo.desc() : fieldInfo.signature();
+                    rv.dstType = fieldInfo.signature() == null ? fieldInfo.descriptor() : fieldInfo.signature();
                     return true;
                 }
 

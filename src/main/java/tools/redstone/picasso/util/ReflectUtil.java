@@ -137,6 +137,13 @@ public class ReflectUtil {
         }
     }
 
+    /**
+     * Create a class reader for the class file of the given class.
+     *
+     * @param klass The class.
+     * @return The reader.
+     * @see #getBytes(Class)
+     */
     public static ClassReader reader(Class<?> klass) {
         return new ClassReader(getBytes(klass));
     }
@@ -197,6 +204,14 @@ public class ReflectUtil {
         }
     }
 
+    /**
+     * Try to find a loaded class by the given name in the given loader.
+     *
+     * @param loader The loader.
+     * @param name The class name.
+     * @return The loaded class or null if absent.
+     * @see ClassLoader#findLoadedClass(String)
+     */
     public static Class<?> findLoadedClass(ClassLoader loader, String name) {
         try {
             return (Class<?>) ClassLoader_findLoadedClass.invoke(loader, name);
@@ -212,6 +227,12 @@ public class ReflectUtil {
         return klass.hashCode() != 0;
     }
 
+    /**
+     * Finds the root class loader from the given class loader.
+     *
+     * @param loader The start loader.
+     * @return The root class loader.
+     */
     public static ClassLoader rootClassLoader(ClassLoader loader) {
         while (loader.getParent() != null) {
             loader = loader.getParent();

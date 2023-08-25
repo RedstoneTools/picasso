@@ -10,6 +10,7 @@ public record ReferenceDependency(
         ReferenceInfo info,
         Boolean implemented
 ) implements Dependency {
+    /** Redefine whether this dependency is optional */
     public ReferenceDependency asOptional(boolean optional) {
         return new ReferenceDependency(optional, info, implemented);
     }

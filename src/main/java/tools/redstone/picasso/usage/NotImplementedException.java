@@ -2,6 +2,9 @@ package tools.redstone.picasso.usage;
 
 import tools.redstone.picasso.analysis.ReferenceInfo;
 
+/**
+ * Signifies that a specific reference is not implemented.
+ */
 public class NotImplementedException extends RuntimeException {
 
     private final ReferenceInfo ref; // The reference that wasn't implemented
