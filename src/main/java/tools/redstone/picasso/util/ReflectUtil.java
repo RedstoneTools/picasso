@@ -316,4 +316,38 @@ public class ReflectUtil {
         return arr2;
     }
 
+    /**
+     *
+     * @param aClass The first class.
+     * @param bClass The second class.
+     * @return 0 if they're the same, otherwise the distance between the two.
+     */
+    public static int findSuperclassSeparation(Class<?> aClass, Class<?> bClass) {
+        if (aClass == bClass)
+            return 0;
+        if (aClass.isAssignableFrom(bClass)) {
+            // swap aClass and bClass so bClass is the superclass and aClass
+            // is the subclass
+            Class<?> t = aClass;
+            aClass = bClass;
+            bClass = t;
+        }
+
+        // find separation
+        Class<?> superCl = aClass.getSuperclass();
+        if (superCl.isAssignableFrom(bClass)) {
+            return findSuperclassSeparation(superCl, bClass) + 1;
+        }
+
+        if (bClass.isInterface()) {
+            for (Class<?> itf : aClass.getInterfaces()) {
+                if (itf.isAssignableFrom(bClass)) {
+                    return findSuperclassSeparation(itf, bClass) + 1;
+                }
+            }
+        }
+
+        return -1;
+    }
+
 }

@@ -3,7 +3,6 @@ package test.picasso;
 import org.junit.jupiter.api.Assertions;
 import tools.redstone.picasso.AbstractionProvider;
 import tools.redstone.picasso.HandleAbstraction;
-import tools.redstone.picasso.adapter.Adapter;
 import tools.redstone.picasso.adapter.AdapterRegistry;
 import tools.redstone.picasso.usage.Abstraction;
 
@@ -50,16 +49,16 @@ public class AdapterHookTest {
         }
     }
 
-    {
+    void setup_test_AdapterHooks(TestSystem.TestInterface itf) {
         // setup adapters
-        AdapterRegistry.registerHandleAdapter(InternalA.class, A.class);
-        AdapterRegistry.registerHandleAdapter(InternalA.class, B.class);
+        itf.adapterRegistry().registerHandleAdapter(InternalA.class, A.class);
+        itf.adapterRegistry().registerHandleAdapter(InternalB.class, B.class);
     }
 
     @TestSystem.Test(autoRegisterImpls = true)
     void test_AdapterHooks(TestSystem.TestInterface itf) {
         // execute run
-        itf.runTransformed("run", itf.abstractionManager());
+        itf.runTransformed("run", itf.abstractionProvider());
     }
 
 }

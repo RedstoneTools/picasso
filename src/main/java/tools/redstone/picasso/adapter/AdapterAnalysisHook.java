@@ -11,22 +11,47 @@ import tools.redstone.picasso.util.asm.ASMUtil;
 import tools.redstone.picasso.util.asm.ComputeStack;
 import tools.redstone.picasso.util.asm.MethodWriter;
 
+import java.lang.ref.Cleaner;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.function.Function;
 
-public class AdapterAnalysisHook implements ClassAnalysisHook {
+public class AdapterAnalysisHook implements ClassAnalysisHook, Cleaner.Cleanable {
+
+    static final Cleaner CLEANER = Cleaner.create();
+
+    private static final Map<Integer, AdapterRegistry>
+            INTERNAL_ADAPTER_REGISTRY_BY_HOOK = new HashMap<>();
+
+    /* /!\ INTERNAL METHOD ONLY USED IN BYTECODE /!\ */
+    public static AdapterRegistry getAdapterRegistryByHookId(int id) {
+        return INTERNAL_ADAPTER_REGISTRY_BY_HOOK.get(id);
+    }
+
+    static int idCounter = 0;
 
     static final Type TYPE_Object = Type.getType(Object.class);
     static final Type TYPE_AdapterRegistry = Type.getType(AdapterRegistry.class);
     static final Type TYPE_Function = Type.getType(Function.class);
     static final String NAME_Function = TYPE_Function.getInternalName();
+    static final Type TYPE_AdapterAnalysisHook = Type.getType(AdapterAnalysisHook.class);
 
     private final AdapterRegistry adapterRegistry;                               // The adapter registry to source adapters from
     private int adapterIdCounter = 0;                                            // The counter for the $$adapter_xx fields
     private final AbstractionProvider.ClassInheritanceChecker inheritanceChecker; // The inheritance checker to check for `adapt` calls
+    private final int id = idCounter++;
 
     public AdapterAnalysisHook(Class<?> adaptMethodOwner, AdapterRegistry adapterRegistry) {
         this.adapterRegistry = adapterRegistry;
         inheritanceChecker = AbstractionProvider.ClassInheritanceChecker.forClass(adaptMethodOwner);
+        INTERNAL_ADAPTER_REGISTRY_BY_HOOK.put(id, adapterRegistry);
+        CLEANER.register(this, () -> { });
+    }
+
+    @Override
+    public void clean() {
+        // remove registry reference when this hook is cleaned
+        INTERNAL_ADAPTER_REGISTRY_BY_HOOK.remove(id);
     }
 
     static class TrackedReturnValue implements ComputeStack.Value {
@@ -93,11 +118,13 @@ public class AdapterAnalysisHook implements ClassAnalysisHook {
                             String dstType = trackedReturnValue.dstType;
                             if (dstType == null)
                                 return;
+                            Type dstAsmType = Type.getType(dstType);
 
-                            v.visitMethodInsn(Opcodes.INVOKESTATIC, TYPE_AdapterRegistry.getInternalName(), "getInstance", "()L" + TYPE_AdapterRegistry.getInternalName() + ";", false);
-                            v.visitLdcInsn(srcAsmType);
-                            v.visitLdcInsn(dstType);
-                            v.visitMethodInsn(Opcodes.INVOKEVIRTUAL, TYPE_AdapterRegistry.getInternalName(), "lazyRequireMonoDirectional", "(Ljava/lang/String;Ljava/lang/String;)" + TYPE_Function.getDescriptor(), false);
+                            v.visitIntInsn(Opcodes.SIPUSH, id); // get adapter registry instance
+                            v.visitMethodInsn(Opcodes.INVOKESTATIC, TYPE_AdapterAnalysisHook.getInternalName(), "getAdapterRegistryByHookId", "(I)L" + TYPE_AdapterRegistry.getInternalName() + ";", false);
+                            v.visitLdcInsn(srcAsmType); // push src and dst types
+                            v.visitLdcInsn(dstAsmType); // then find the dynamic adapter
+                            v.visitMethodInsn(Opcodes.INVOKEINTERFACE, TYPE_AdapterRegistry.getInternalName(), "lazyAdaptingFunction", "(Ljava/lang/Class;Ljava/lang/Class;)" + TYPE_Function.getDescriptor(), true);
                             v.visitFieldInsn(Opcodes.PUTSTATIC, currMethod.internalClassName(), fieldName, TYPE_Function.getDescriptor());
                             if (finalCreated) v.visitInsn(Opcodes.RETURN);
                         }
@@ -120,19 +147,19 @@ public class AdapterAnalysisHook implements ClassAnalysisHook {
                             context.abstractionProvider().findClass(dstAsmType.getClassName());
 
                         // check if the adapter exists
-                        if (adapterRegistry.findMonoDirectional(srcAsmType, dstAsmType) == null)
+                        if (adapterRegistry.findAdapterFunction(srcAsmType, dstAsmType) == null)
                             throw new IllegalStateException("No adapter found for src = " + srcAsmType + ", dst = " + dstAsmType + " in method " + currMethod);
 
                         // pop original instance variable after
                         if (!isStatic) {
-                                                       // val - this
-                            v.visitInsn(Opcodes.SWAP); // this - val
+                                                       // this - val
+                            v.visitInsn(Opcodes.SWAP); // val - this
                             v.visitInsn(Opcodes.POP);  // val
                         }
 
                         // push adapter and swap
                         v.visitFieldInsn(Opcodes.GETSTATIC, currMethod.internalClassName(), fieldName, TYPE_Function.getDescriptor());
-                        v.visitInsn(Opcodes.SWAP); // val - function
+                        v.visitInsn(Opcodes.SWAP); // function - val
 
                         // make it call Function#apply
                         v.visitMethodInsn(Opcodes.INVOKEINTERFACE, NAME_Function, "apply", "(Ljava/lang/Object;)Ljava/lang/Object;", true);
