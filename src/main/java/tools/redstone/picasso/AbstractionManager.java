@@ -101,14 +101,14 @@ public class AbstractionManager {
         return new AbstractionProvider(this);
     }
 
-    public AbstractionProvider createDefaultProvider() {
+    public AbstractionProvider createDefaultProvider(AdapterRegistry adapterRegistry) {
         return new AbstractionProvider(this)
                 .addAnalysisHook(AbstractionProvider.excludeCallsOnSelfAsDependencies())
                 .addAnalysisHook(AbstractionProvider.checkDependenciesForInterface(Abstraction.class, true))
                 .addAnalysisHook(AbstractionProvider.checkStaticFieldsNotNull())
                 .addAnalysisHook(AbstractionProvider.checkForExplicitImplementation(Abstraction.class))
                 .addAnalysisHook(AbstractionProvider.autoRegisterLoadedImplClasses())
-                .addAnalysisHook(new AdapterAnalysisHook(Abstraction.class, AdapterRegistry.getInstance()));
+                .addAnalysisHook(new AdapterAnalysisHook(Abstraction.class, adapterRegistry));
     }
 
 }

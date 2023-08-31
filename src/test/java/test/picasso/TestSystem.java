@@ -6,6 +6,7 @@ import tools.redstone.picasso.AbstractionManager;
 import tools.redstone.picasso.AbstractionProvider;
 import tools.redstone.picasso.adapter.AdapterAnalysisHook;
 import tools.redstone.picasso.adapter.AdapterRegistry;
+import tools.redstone.picasso.adapter.DynamicAdapterRegistry;
 import tools.redstone.picasso.analysis.Dependency;
 import tools.redstone.picasso.analysis.ClassAnalysisHook;
 import tools.redstone.picasso.analysis.ReferenceDependency;
@@ -30,7 +31,7 @@ import java.util.*;
 public class TestSystem {
 
     // Test interface
-    public record TestInterface(Class<?> rootClass, String testMethod, AbstractionProvider abstractionManager) {
+    public record TestInterface(Class<?> rootClass, String testMethod, AbstractionProvider abstractionProvider, AdapterRegistry adapterRegistry) {
         @SuppressWarnings("unchecked")
         public <T> T runTransformed(String cName, String mName, Object... args) {
             try {
@@ -42,7 +43,7 @@ public class TestSystem {
                         cName;
 
                 // load class
-                Class<?> klass = abstractionManager.findClass(cName);
+                Class<?> klass = abstractionProvider.findClass(cName);
 
                 // find and execute method
                 Method m = null;
@@ -114,6 +115,7 @@ public class TestSystem {
                 if (testAnnotation == null) continue;
                 method.setAccessible(true);
 
+                final AdapterRegistry adapterRegistry = new DynamicAdapterRegistry();
                 final AbstractionProvider abstractionProvider =
                         // create new abstraction manager
                         new AbstractionProvider(AbstractionManager.getInstance())
@@ -124,7 +126,7 @@ public class TestSystem {
                                 .addAnalysisHook(AbstractionProvider.checkForExplicitImplementation(Abstraction.class))
                                 .addAnalysisHook(AbstractionProvider.checkStaticFieldsNotNull())
                                 .addAnalysisHook(AbstractionProvider.autoRegisterLoadedImplClasses())
-                                .addAnalysisHook(new AdapterAnalysisHook(Abstraction.class, AdapterRegistry.getInstance()));
+                                .addAnalysisHook(new AdapterAnalysisHook(Abstraction.class, adapterRegistry));
 
                 // get test name
                 final String testName = method.getName();
@@ -134,6 +136,19 @@ public class TestSystem {
                 String abstractionImplName = testAnnotation.abstractionImpl().isEmpty() ? null : klass.getName() + "$" + testAnnotation.abstractionImpl();
 
                 long t1 = System.currentTimeMillis();
+
+                TestInterface testInterface = new TestInterface(klass, method.getName(), abstractionProvider, adapterRegistry);
+
+                try {
+                    // find and run setup method
+                    Method setup = klass.getDeclaredMethod("setup_" + method.getName(), TestInterface.class);
+                    setup.setAccessible(true);
+                    setup.invoke(instance, testInterface);
+                } catch (NoSuchMethodException ignored) {
+
+                } catch (Exception e) {
+                    throw new RuntimeException("Error in setup of test " + testName, e);
+                }
 
                 // load hooks
                 List<Object> hooks = new ArrayList<>();
@@ -189,14 +204,13 @@ public class TestSystem {
                 long t3 = System.currentTimeMillis();
                 if (debug) System.out.println("DEBUG test " + testName + ": loading and transforming test class took " + (t3 - t2) + "ms");
 
-                TestInterface testInterface = new TestInterface(klass, method.getName(), abstractionProvider);
-
                 // order arguments
                 Object[] args = new Object[method.getParameterTypes().length];
                 for (int i = 0, n = method.getParameterTypes().length; i < n; i++) {
                     Class<?> type = method.getParameterTypes()[i];
 
                     if (implClass != null && type.isAssignableFrom(implClass)) args[i] = implInstance;
+                    else if (type.isAssignableFrom(AdapterRegistry.class)) args[i] = adapterRegistry;
                     else if (testClass != null && type.isAssignableFrom(testClass)) args[i] = testInstance;
                     else if (type.isAssignableFrom(AbstractionProvider.class)) args[i] = abstractionProvider;
                     else if (TestInterface.class == type) args[i] = testInterface;

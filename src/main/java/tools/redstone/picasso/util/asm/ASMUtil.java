@@ -1,5 +1,6 @@
 package tools.redstone.picasso.util.asm;
 
+import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.Type;
 import org.objectweb.asm.tree.ClassNode;
@@ -76,6 +77,16 @@ public class ASMUtil {
             case Type.METHOD -> asClass(type.getReturnType());
             default -> throw new AssertionError();
         };
+    }
+
+    public static void makeDebugLog(MethodVisitor v, String msg) {
+        v.visitFieldInsn(Opcodes.GETSTATIC, "java/lang/System", "out", "Ljava/io/PrintStream;");
+        v.visitLdcInsn(msg);
+        v.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "java/io/PrintStream", "println", "(Ljava/lang/String;)V", false);
+    }
+
+    public static void forceVerifyError(MethodVisitor v) {
+        v.visitMethodInsn(Opcodes.INVOKESTATIC, "0", "0", "(IIIIIIIIIIIIIIIIIIIIIII)V");
     }
 
 }
